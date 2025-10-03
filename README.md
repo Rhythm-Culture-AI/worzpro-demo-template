@@ -4,18 +4,47 @@ A simple template for creating Gradio audio analysis demos.
 
 ## Quick Start
 
-1. **Install dependencies:**
-   ```bash
-   uv sync
-   ```
+### Option 1: UV (Recommended)
+```bash
+# Install UV if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-2. **Run the demo:**
-   ```bash
-   uv run demo_template.py --port 8080
-   ```
+# Install dependencies
+uv sync
 
-3. **Open your browser:**
-   Visit `http://localhost:8080`
+# Run the demo
+uv run demo_template.py --port 8080 --auto-port
+```
+
+### Option 2: Conda
+```bash
+# Create conda environment
+conda create -n worzpro-demo python=3.10
+conda activate worzpro-demo
+
+# Install dependencies
+conda install -c conda-forge gradio numpy soundfile librosa python-dotenv
+pip install madmom yt-dlp
+
+# Run the demo
+python demo_template.py --port 8080 --auto-port
+```
+
+### Option 3: Pip
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the demo
+python demo_template.py --port 8080 --auto-port
+```
+
+### Open your browser:
+Visit `http://localhost:8080`
 
 ## Features
 
