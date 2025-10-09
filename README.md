@@ -46,6 +46,32 @@ python demo_template.py --port 8080 --auto-port
 ### Open your browser:
 Visit `http://localhost:8080`
 
+### Create a Public URL (Optional)
+
+Share your demo with others using the `--share` flag:
+
+```bash
+# UV
+uv run demo_template.py --share
+
+# Python
+python demo_template.py --share
+```
+
+This creates a temporary public URL (valid for 72 hours) that you can share with anyone.
+
+**Example output:**
+```
+Running on local URL:  http://127.0.0.1:7860
+Running on public URL: https://abc123xyz.gradio.live
+```
+
+**Use cases:**
+- Share demos with colleagues/clients
+- Test on mobile devices
+- Demo from behind a firewall
+- Quick prototyping without deployment
+
 ## Features
 
 - Audio file upload
@@ -56,7 +82,13 @@ Visit `http://localhost:8080`
 
 ## Customization
 
-Replace the `analyze_audio()` function in `demo_template.py` with your own audio processing logic.
+**See [CUSTOMIZATION_GUIDE.md](CUSTOMIZATION_GUIDE.md)** for detailed instructions on adapting this template for your audio processing needs.
+
+Quick summary:
+1. Replace library imports (madmom → your library)
+2. Update configuration (title, description)
+3. Rewrite `analyze_audio()` function with your logic
+4. Update analysis options in the UI
 
 ## Requirements
 

@@ -62,4 +62,4 @@ outputs/youtube_downloads/
 # Temporary files
 temp/
 tmp/
-*.tmp
+*.tmp.gradio/

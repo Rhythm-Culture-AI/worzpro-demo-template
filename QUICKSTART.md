@@ -57,12 +57,55 @@ Edit `demo_template.py`:
 - Update the `analyze_audio()` function
 - Change the UI text and options
 
-## Options
+## Command-Line Options
 
 ```bash
---port 8080    # Custom port
---share         # Get public URL
+--port 8080     # Use custom port
+--auto-port     # Automatically find available port if occupied
+--share         # Create public URL (valid for 72 hours)
+--debug         # Enable debug mode with auto-reload
 --help          # Show all options
 ```
+
+### Examples
+
+```bash
+# Local only
+python demo_template.py
+
+# Custom port with auto-fallback
+python demo_template.py --port 8080 --auto-port
+
+# Public URL for sharing
+python demo_template.py --share
+
+# Public URL on custom port
+python demo_template.py --share --port 8080
+```
+
+### Using --share Flag
+
+The `--share` flag creates a **temporary public URL** using Gradio's sharing service:
+
+```bash
+python demo_template.py --share
+```
+
+**You'll see:**
+```
+🔐 GRADIO_ALLOWED_PATHS configured: 4 directories
+Running on local URL:  http://127.0.0.1:7860
+Running on public URL: https://abc123xyz.gradio.live  ← Share this!
+```
+
+**Benefits:**
+- ✅ Share demos instantly (no deployment needed)
+- ✅ Test on mobile devices
+- ✅ Demo to clients/colleagues remotely
+- ✅ Works behind firewalls
+
+**Note:** Public URLs expire after 72 hours.
+
+---
 
 That's it! 🎉

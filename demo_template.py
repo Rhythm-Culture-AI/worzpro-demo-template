@@ -1,28 +1,22 @@
 
 #!/usr/bin/env python3
 """
-Worzpro Demo Template - Standalone Version
+Worzpro Demo Template - Standalone Gradio Audio Analysis Demo
 
-A complete template for creating professional Gradio audio analysis demos.
-This example uses madmom for music information retrieval.
-
-Replace madmom with your audio processing library and customize the analysis function.
-
-Key Features:
+Features:
 - Sample audio library with automatic discovery
 - YouTube download integration (yt-dlp)
-- Multiple analysis options (checkbox selection)
+- Multiple analysis options
 - Audio visualization with click tracks
 - Professional UI with Gradio Soft theme
-- Comprehensive error handling
-- Command-line arguments (--share, --port)
+- Command-line arguments (--share, --port, --auto-port)
 
 Structure:
-1. Configuration (lines 20-80)
-2. UI Helpers - Reusable (lines 80-200)
-3. YouTube Download - Keep as-is (lines 200-300)
-4. Core Analysis - REPLACE THIS (lines 300-500)
-5. Demo Interface - Customize (lines 500-800)
+1. Configuration - Customize for your project
+2. UI Helpers - Reusable across demos
+3. YouTube Download - Keep as-is
+4. Core Analysis - Replace with your audio processing
+5. Demo Interface - Customize UI and options
 """
 
 import os
@@ -34,11 +28,10 @@ import numpy as np
 import soundfile as sf
 import librosa
 import socket
+import tempfile
 from dotenv import load_dotenv
 
-# ============================================================================
-# EXAMPLE: Madmom-specific imports (replace with your library)
-# ============================================================================
+# === EXAMPLE: Madmom-specific imports (replace with your library) ===
 try:
     from madmom.features.downbeats import DBNDownBeatTrackingProcessor, RNNDownBeatProcessor
     from madmom.features.onsets import OnsetPeakPickingProcessor, RNNOnsetProcessor
@@ -49,14 +42,12 @@ except ImportError:
     MADMOM_AVAILABLE = False
     print("⚠️ Madmom not available. Install with: uv add madmom")
 
-# ============================================================================
-# CONFIGURATION - Customize for your project
-# ============================================================================
+# === CONFIGURATION ===
 load_dotenv()
 
-# Directories
-SAMPLES_DIR = Path(os.getenv('SAMPLES_DIR', 'assets/audio_samples'))
-OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR', 'outputs/demo_analysis'))
+# Directories (use absolute paths for file serving)
+SAMPLES_DIR = Path(os.getenv('SAMPLES_DIR', 'assets/audio_samples')).resolve()
+OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR', 'outputs/demo_analysis')).resolve()
 
 # Audio configuration
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
@@ -74,67 +65,10 @@ Comprehensive music information retrieval using madmom.
 Replace this with your own audio processing library!
 """
 
-# Minimal CSS - Let Gradio theme handle most styling
-MINIMAL_CSS = """
-<style>
-    .demo-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 2rem;
-        background: white;
-    }
-</style>
-"""
+# Custom CSS (optional)
+CUSTOM_CSS = ""
 
-# ============================================================================
-# UI HELPERS - Keep these unchanged (reusable across demos)
-# ============================================================================
-
-def create_simple_home_link():
-    """
-    Create a simple home link for navigation.
-    Appears as a fixed icon in the top-right corner.
-    """
-    css = """
-    <style>
-        .home-link-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-        }
-        .home-link {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            padding: 0.5rem;
-            border-radius: 8px;
-            background: #f5f5f5;
-            border: 1px solid #e5e5e5;
-            transition: all 0.3s ease;
-            width: 40px;
-            height: 40px;
-        }
-        .home-link:hover {
-            background: #e5e5e5;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .home-icon {
-            font-size: 20px;
-            color: #404040;
-        }
-    </style>
-    """
-    html = """
-    <div class="home-link-container">
-        <a href="/" class="home-link" aria-label="Back to Home">
-            <span class="home-icon">🏠</span>
-        </a>
-    </div>
-    """
-    return gr.HTML(css + html)
+# === UI HELPERS ===
 
 def get_audio_samples():
     """
@@ -153,18 +87,10 @@ def get_audio_samples():
                 friendly_name = audio_file.stem.replace('_', ' ').replace('-', ' - ')
 
                 # Assign emoji based on filename
-                emoji = "🎵"
                 filename_lower = friendly_name.lower()
-                if "guitar" in filename_lower:
-                    emoji = "🎸"
-                elif "drum" in filename_lower or "beat" in filename_lower:
-                    emoji = "🥁"
-                elif "piano" in filename_lower or "keyboard" in filename_lower:
-                    emoji = "🎹"
-                elif "vocal" in filename_lower or "voice" in filename_lower:
-                    emoji = "🎤"
-                elif "bass" in filename_lower:
-                    emoji = "🎸"
+                emoji_map = {'guitar': '🎸', 'drum': '🥁', 'beat': '🥁', 'piano': '🎹',
+                            'keyboard': '🎹', 'vocal': '🎤', 'voice': '🎤', 'bass': '🎸'}
+                emoji = next((v for k, v in emoji_map.items() if k in filename_lower), '🎵')
 
                 samples.append({
                     'name': friendly_name,
@@ -182,11 +108,12 @@ def get_audio_samples():
 
 def load_sample_audio(sample_path):
     """Load a sample audio file path for the audio input component."""
-    return sample_path if sample_path else None
+    if sample_path:
+        # Ensure absolute path for proper file serving
+        return str(Path(sample_path).resolve())
+    return None
 
-# ============================================================================
-# YOUTUBE DOWNLOAD - Keep as-is (uses yt-dlp)
-# ============================================================================
+# === YOUTUBE DOWNLOAD ===
 
 def download_youtube_audio_ytdlp(youtube_url, audio_format="wav", audio_quality="128"):
     """
@@ -271,9 +198,7 @@ def download_youtube_audio_ytdlp(youtube_url, audio_format="wav", audio_quality=
     except Exception as e:
         return None, f"# ❌ Error\n\n**Download failed:** `{str(e)}`"
 
-# ============================================================================
-# CORE ANALYSIS FUNCTION - REPLACE THIS WITH YOUR PROCESSING LOGIC
-# ============================================================================
+# === CORE ANALYSIS (REPLACE WITH YOUR PROCESSING) ===
 
 def analyze_audio(audio_file, analysis_options):
     """
@@ -456,26 +381,10 @@ def analyze_audio(audio_file, analysis_options):
         print(f"Error during analysis:\n{error_details}")
         return f"# ❌ Error\n\n**Analysis failed:** `{str(e)}`\n\nCheck console for details.", None, None, None
 
-# ============================================================================
-# DEMO INTERFACE - Customize title, options, and help text
-# ============================================================================
+# === DEMO INTERFACE ===
 
 def create_demo():
-    """
-    Create the Gradio demo interface.
-
-    Structure (10 sections):
-    1. Home link
-    2. Demo container
-    3. Title and description
-    4. Sample audio section
-    5. Input section (file + YouTube)
-    6. Configuration options
-    7. Action buttons
-    8. Results section
-    9. Audio outputs
-    10. Help section
-    """
+    """Create the Gradio demo interface."""
 
     with gr.Blocks(
         title=APP_TITLE,
@@ -484,146 +393,117 @@ def create_demo():
             neutral_hue="gray",
             font=[gr.themes.GoogleFont("Inter"), "system-ui", "sans-serif"]
         ),
-        css=MINIMAL_CSS
+        css=CUSTOM_CSS
     ) as demo:
-        # 1. Home link (optional - remove if running standalone)
-        # create_simple_home_link()
+        # Title and description
+        gr.Markdown(APP_DESCRIPTION)
 
-        # 2. Demo container
-        with gr.Column(elem_classes="demo-container"):
-            # 3. Title and description
-            gr.Markdown(APP_DESCRIPTION)
+        # Sample Audio Section
+        gr.Markdown("### 🎵 Sample Audio (Click to Load)")
 
-            # 4. Sample Audio Section
-            gr.Markdown("### 🎵 Sample Audio (Click to Load)")
-
-            audio_samples = get_audio_samples()
-            if audio_samples:
-                with gr.Row():
-                    sample_buttons = []
-                    for sample in audio_samples:
-                        btn = gr.Button(
-                            f"{sample['emoji']} {sample['name']}",
-                            variant="secondary",
-                            size="sm"
-                        )
-                        sample['button'] = btn
-                        sample_buttons.append((btn, sample['path']))
-            else:
-                gr.Markdown(f"*No audio samples found. Add files to: `{SAMPLES_DIR}`*")
-
-            # 5. Input Section
-            gr.Markdown("### 🎯 Input Audio")
-
+        audio_samples = get_audio_samples()
+        if audio_samples:
             with gr.Row():
-                with gr.Column(scale=2):
-                    audio_input = gr.Audio(
-                        label="Drop audio file here",
-                        type="filepath"
+                sample_buttons = []
+                for sample in audio_samples:
+                    btn = gr.Button(
+                        f"{sample['emoji']} {sample['name']}",
+                        variant="secondary",
+                        size="sm"
                     )
+                    sample['button'] = btn
+                    sample_buttons.append((btn, sample['path']))
+        else:
+            gr.Markdown(f"*No audio samples found. Add files to: `{SAMPLES_DIR}`*")
 
-                with gr.Column(scale=1):
-                    youtube_url = gr.Textbox(
-                        label="Or paste YouTube URL",
-                        placeholder="https://youtube.com/watch?v=...",
-                        lines=2
-                    )
-                    audio_format = gr.Dropdown(
-                        label="Format",
-                        choices=["wav", "mp3"],
-                        value="wav"
-                    )
-                    audio_quality = gr.Dropdown(
-                        label="Quality (MP3)",
-                        choices=["320", "192", "128", "96"],
-                        value="128"
-                    )
+        # Input Section
+        gr.Markdown("### 🎯 Input Audio")
 
-            # Connect sample buttons
-            if audio_samples:
-                for btn, path in sample_buttons:
-                    btn.click(
-                        fn=lambda p=path: load_sample_audio(p),
-                        outputs=[audio_input]
-                    )
+        with gr.Row():
+            with gr.Column(scale=2):
+                audio_input = gr.Audio(
+                    label="Drop audio file here",
+                    type="filepath"
+                )
 
-            # YouTube download button
-            yt_download_btn = gr.Button("📥 Download from YouTube", variant="secondary")
+            with gr.Column(scale=1):
+                youtube_url = gr.Textbox(
+                    label="Or paste YouTube URL",
+                    placeholder="https://youtube.com/watch?v=...",
+                    lines=2
+                )
+                audio_format = gr.Dropdown(
+                    label="Format",
+                    choices=["wav", "mp3"],
+                    value="wav"
+                )
+                audio_quality = gr.Dropdown(
+                    label="Quality (MP3)",
+                    choices=["320", "192", "128", "96"],
+                    value="128"
+                )
 
-            # 6. Configuration Options
-            gr.Markdown("### ⚙️ Analysis Options")
+        # Connect sample buttons
+        if audio_samples:
+            for btn, path in sample_buttons:
+                btn.click(
+                    fn=lambda p=path: load_sample_audio(p),
+                    outputs=[audio_input]
+                )
 
-            analysis_options = gr.CheckboxGroup(
-                label="Select Features to Extract",
-                choices=[
-                    "Beat Tracking",
-                    "Onset Detection",
-                    "Tempo Estimation"
-                ],
-                value=["Beat Tracking"],
-                info="Choose which analysis to perform"
+        # YouTube download button
+        yt_download_btn = gr.Button("📥 Download from YouTube", variant="secondary")
+
+        # Configuration Options
+        gr.Markdown("### ⚙️ Analysis Options")
+
+        analysis_options = gr.CheckboxGroup(
+            label="Select Features to Extract",
+            choices=[
+                "Beat Tracking",
+                "Onset Detection",
+                "Tempo Estimation"
+            ],
+            value=["Beat Tracking"],
+            info="Choose which analysis to perform"
+        )
+
+        # Action Button
+        analyze_btn = gr.Button("🔬 Analyze Audio", variant="primary", size="lg")
+
+        # Results Section
+        gr.Markdown("### 📊 Results")
+        results_text = gr.Markdown()
+
+        # Audio Outputs
+        gr.Markdown("### 🎧 Audio Outputs")
+        gr.Markdown("**Listen to detected features overlaid on original audio:**")
+
+        with gr.Row():
+            audio_output_1 = gr.Audio(
+                label="Beats + Downbeats",
+                type="filepath"
+            )
+            audio_output_2 = gr.Audio(
+                label="Onsets",
+                type="filepath"
+            )
+            audio_output_3 = gr.Audio(
+                label="Additional Output",
+                type="filepath"
             )
 
-            # 7. Action Button
-            analyze_btn = gr.Button("🔬 Analyze Audio", variant="primary", size="lg")
+        # Help Section
+        with gr.Accordion("ℹ️ Help", open=False):
+            gr.Markdown("""
+                **Features:**
+                - 🥁 **Beat Tracking:** Detects beats/downbeats and estimates BPM
+                - 🎯 **Onset Detection:** Identifies note onset events
+                - ⏱️ **Tempo Estimation:** Estimates primary tempo
 
-            # 8. Results Section
-            gr.Markdown("### 📊 Results")
-            results_text = gr.Markdown()
-
-            # 9. Audio Outputs
-            gr.Markdown("### 🎧 Audio Outputs")
-            gr.Markdown("**Listen to detected features overlaid on original audio:**")
-
-            with gr.Row():
-                audio_output_1 = gr.Audio(
-                    label="Beats + Downbeats",
-                    type="filepath"
-                )
-                audio_output_2 = gr.Audio(
-                    label="Onsets",
-                    type="filepath"
-                )
-                audio_output_3 = gr.Audio(
-                    label="Additional Output",
-                    type="filepath"
-                )
-
-            # 10. Help Section
-            with gr.Accordion("ℹ️ Help & Information", open=False):
-                gr.Markdown("""
-                    **Analysis Features:**
-
-                    🥁 **Beat Tracking:**
-                    - Detects beats and downbeats
-                    - Estimates BPM
-                    - Uses RNN + DBN algorithms
-
-                    🎯 **Onset Detection:**
-                    - Identifies note onset events
-                    - High temporal resolution
-                    - Useful for rhythm analysis
-
-                    ⏱️ **Tempo Estimation:**
-                    - Estimates primary tempo
-                    - Handles tempo variations
-                    - Provides BPM confidence
-
-                    **Audio Outputs:**
-                    - **Beats:** 800 Hz clicks for beats, 1200 Hz for downbeats
-                    - **Onsets:** 1500 Hz clicks
-                    - Click tracks overlaid at 30% volume
-
-                    **Supported Formats:** WAV, MP3, FLAC, OGG, M4A, AAC
-                    **YouTube:** Uses yt-dlp for reliable downloads
-                    **Output Location:** `outputs/demo_analysis/`
-
-                    ---
-
-                    **Customization:**
-                    Replace the `analyze_audio()` function with your own processing logic.
-                    See `docs/USAGE_GUIDE.md` for detailed instructions.
-                """)
+                **Supported:** WAV, MP3, FLAC, OGG, M4A, AAC
+                **Output:** `outputs/demo_analysis/`
+            """)
 
         # Event Handlers
         yt_download_btn.click(
@@ -640,9 +520,7 @@ def create_demo():
 
     return demo
 
-# ============================================================================
-# PORT UTILITIES
-# ============================================================================
+# === PORT UTILITIES ===
 
 def is_port_available(port: int, host: str = "0.0.0.0") -> bool:
     """Check if a port is available."""
@@ -660,9 +538,7 @@ def find_available_port(start_port: int, host: str = "0.0.0.0", max_attempts: in
             return port
     raise RuntimeError(f"Could not find an available port starting from {start_port}")
 
-# ============================================================================
-# COMMAND-LINE ARGUMENTS
-# ============================================================================
+# === COMMAND-LINE ARGUMENTS ===
 
 def parse_args():
     """Parse command-line arguments."""
@@ -716,9 +592,7 @@ Environment Variables:
 
     return parser.parse_args()
 
-# ============================================================================
-# MAIN - Entry point
-# ============================================================================
+# === MAIN ===
 
 if __name__ == "__main__":
     # Parse arguments
@@ -764,6 +638,16 @@ if __name__ == "__main__":
         print("\n⚠️ Warning: Madmom not available")
         print("   Install with: uv add madmom")
         print("   Or replace with your own audio library\n")
+
+    # Configure allowed paths for file serving (CRITICAL for --share and public URLs)
+    allowed_paths = [
+        str(SAMPLES_DIR),
+        str(OUTPUT_DIR),
+        os.path.join(tempfile.gettempdir(), 'gradio'),
+        tempfile.gettempdir()
+    ]
+    os.environ['GRADIO_ALLOWED_PATHS'] = ':'.join(allowed_paths)
+    print(f"🔐 GRADIO_ALLOWED_PATHS configured: {len(allowed_paths)} directories")
 
     # Create demo
     demo = create_demo()
