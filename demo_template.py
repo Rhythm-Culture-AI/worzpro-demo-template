@@ -47,14 +47,14 @@ load_dotenv()
 
 # Directories (use absolute paths for file serving)
 SAMPLES_DIR = Path(os.getenv('SAMPLES_DIR', 'assets/audio_samples')).resolve()
-OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR', 'outputs/demo_analysis')).resolve()
+TEMP_DIR = Path(os.getenv('TEMP_DIR', 'outputs/demo_analysis')).resolve()
 
 # Audio configuration
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
 
 # Ensure directories exist
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # UI Configuration
 APP_TITLE = "Audio Analysis Demo"
@@ -134,7 +134,7 @@ def download_youtube_audio_ytdlp(youtube_url, audio_format="wav", audio_quality=
         import yt_dlp
 
         # Create output directory
-        output_folder = OUTPUT_DIR / "youtube_downloads"
+        output_folder = TEMP_DIR / "youtube_downloads"
         output_folder.mkdir(parents=True, exist_ok=True)
 
         # Configure output path
@@ -271,7 +271,7 @@ def analyze_audio(audio_file, analysis_options):
 
             # Save
             timestamp = int(time.time())
-            beat_path = OUTPUT_DIR / f"beats_{timestamp}.wav"
+            beat_path = TEMP_DIR / f"beats_{timestamp}.wav"
             sf.write(beat_path, mixed_audio, sr)
             audio_outputs['beats'] = str(beat_path)
 
@@ -299,7 +299,7 @@ def analyze_audio(audio_file, analysis_options):
                 mixed_onset = mixed_onset / np.max(np.abs(mixed_onset)) * 0.8
 
             timestamp = int(time.time())
-            onset_path = OUTPUT_DIR / f"onsets_{timestamp}.wav"
+            onset_path = TEMP_DIR / f"onsets_{timestamp}.wav"
             sf.write(onset_path, mixed_onset, sr)
             audio_outputs['onsets'] = str(onset_path)
 
@@ -502,7 +502,7 @@ def create_demo():
                 - ⏱️ **Tempo Estimation:** Estimates primary tempo
 
                 **Supported:** WAV, MP3, FLAC, OGG, M4A, AAC
-                **Output:** `outputs/demo_analysis/`
+                **Temp files:** Check $TEMP_DIR in .env
             """)
 
         # Event Handlers
@@ -547,14 +547,18 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python demo_template.py                    # Default: localhost:7860
-  python demo_template.py --port 8080        # Custom port
-  python demo_template.py --share            # Public URL with Gradio share
-  python demo_template.py --share --port 8080  # Public URL on custom port
+  python demo_template.py                          # Default: localhost:7860
+  python demo_template.py --port 8080              # Custom port
+  python demo_template.py --share                  # Public URL with Gradio share
+  python demo_template.py --samples-dir ~/Music    # Custom samples directory
+  python demo_template.py --cleanup-days 3         # Clean files older than 3 days
+  python demo_template.py --cleanup-days 0         # Disable cleanup
 
 Environment Variables:
-  PORT        Default port (overridden by --port)
-  HOST        Default host (default: 0.0.0.0)
+  PORT           Default port (overridden by --port)
+  HOST           Default host (default: 0.0.0.0)
+  SAMPLES_DIR    Directory for audio samples (overridden by --samples-dir)
+  TEMP_DIR       Directory for temporary files (configure in .env)
         """
     )
 
@@ -590,13 +594,67 @@ Environment Variables:
         help="Automatically find an available port if the specified port is occupied"
     )
 
+    parser.add_argument(
+        "--samples-dir",
+        type=str,
+        default=os.getenv("SAMPLES_DIR", "assets/audio_samples"),
+        help="Directory containing audio samples (default: assets/audio_samples or $SAMPLES_DIR)"
+    )
+
+    parser.add_argument(
+        "--cleanup-days",
+        type=int,
+        default=7,
+        help="Delete temporary files older than N days (0 to disable cleanup, default: 7)"
+    )
+
     return parser.parse_args()
+
+def cleanup_old_files(directory: Path, days: int):
+    """
+    Delete files older than specified days in the given directory.
+
+    Args:
+        directory: Path to the directory to clean
+        days: Files older than this many days will be deleted
+    """
+    if days <= 0 or not directory.exists():
+        return
+
+    import time
+    cutoff_time = time.time() - (days * 86400)  # 86400 seconds = 1 day
+    deleted_count = 0
+    deleted_size = 0
+
+    try:
+        for file_path in directory.rglob('*'):
+            if file_path.is_file():
+                # Check file modification time
+                if file_path.stat().st_mtime < cutoff_time:
+                    file_size = file_path.stat().st_size
+                    file_path.unlink()
+                    deleted_count += 1
+                    deleted_size += file_size
+
+        if deleted_count > 0:
+            print(f"🧹 Cleaned up {deleted_count} files ({deleted_size / 1024 / 1024:.2f} MB) older than {days} days")
+    except Exception as e:
+        print(f"⚠️ Warning: Cleanup failed: {e}")
 
 # === MAIN ===
 
 if __name__ == "__main__":
     # Parse arguments
     args = parse_args()
+
+    # Update SAMPLES_DIR from command-line argument
+    import sys
+    current_module = sys.modules[__name__]
+    current_module.SAMPLES_DIR = Path(args.samples_dir).resolve()
+
+    # TEMP_DIR is config-only (not CLI argument), ensure it exists
+    current_module.SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+    current_module.TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # Validate port number
     if args.port < 1024:
@@ -624,10 +682,21 @@ if __name__ == "__main__":
             exit(1)
 
     print("🎵 Starting Worzpro Demo Template...")
-    print(f"📁 Samples directory: {SAMPLES_DIR}")
-    print(f"📁 Output directory: {OUTPUT_DIR}")
-    print(f"🌐 Host: {args.host}")
-    print(f"🔌 Port: {args.port}")
+    print(f"\n📂 Directory Configuration:")
+    print(f"  • Samples: {current_module.SAMPLES_DIR}")
+    print(f"  • Temp:    {current_module.TEMP_DIR}")
+
+    # Cleanup old temporary files
+    if args.cleanup_days > 0:
+        print(f"\n🧹 Cleanup Configuration:")
+        print(f"  • Deleting files older than {args.cleanup_days} days...")
+        cleanup_old_files(current_module.TEMP_DIR, args.cleanup_days)
+    else:
+        print(f"\n🧹 Cleanup: Disabled")
+
+    print(f"\n🌐 Server Configuration:")
+    print(f"  • Host: {args.host}")
+    print(f"  • Port: {args.port}")
 
     if args.share:
         print("🌍 Share: Enabled (public URL will be generated)")
@@ -641,8 +710,8 @@ if __name__ == "__main__":
 
     # Configure allowed paths for file serving (CRITICAL for --share and public URLs)
     allowed_paths = [
-        str(SAMPLES_DIR),
-        str(OUTPUT_DIR),
+        str(current_module.SAMPLES_DIR),
+        str(current_module.TEMP_DIR),
         os.path.join(tempfile.gettempdir(), 'gradio'),
         tempfile.gettempdir()
     ]
